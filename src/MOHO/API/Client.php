@@ -15,6 +15,8 @@ class Client
     protected $token = null;
     protected $debug_mode = false;
 
+    private $api = null;
+
     /**
      * This client is based on Opauth
      */
@@ -28,11 +30,8 @@ class Client
         if(empty($this->type) || empty($this->token)) {
             throw new AuthNotValidException;
         }
-    }
 
-    public function getAPI()
-    {
-        return new Store($this);
+        $this->api = new Store($this);
     }
 
     public function get($url, $data = array(), $options = null, &$responseHeaders = null)
@@ -134,6 +133,14 @@ class Client
         }
 
         return array($statusCode, $statusReason, $headers);
+    }
+
+    public function __call($method, $arguments = array())
+    {
+        if(method_exists($this->api, $method)) {
+            return call_user_func_array(array($this->api, $method), $arguments);
+        }
+        return null;
     }
 }
 
