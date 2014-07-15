@@ -9,8 +9,8 @@
 class MOHOStrategy extends OpauthStrategy
 {
 
+    const BASE_URL = "https://magic-bonus.com";
     const DEBUG_URL = "http://sandbox.moho.com.tw";
-    const BASE_URL = "http://magic-bonus.com";
 
     /**
      * Compulsory config keys, listed as unassociative arrays
@@ -101,7 +101,10 @@ class MOHOStrategy extends OpauthStrategy
                 "type" => $userInfo->type
             ),
             "credentials" => array(
-                "token" => $results->access_token
+                "client_id" => $this->strategy["client_id"],
+                "client_secret" => $this->strategy["client_secret"],
+                "token" => $results->access_token,
+                "refresh_token" => $results->refresh_token
             ),
             "raw" => $userInfo
         );

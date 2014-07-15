@@ -8,11 +8,14 @@ namespace MOHO\API;
 
 class Client
 {
-    const API_BASE_URL = "http://magic-bonus.com/api/v3";
+    const API_BASE_URL = "https://magic-bonus.com/api/v3";
     const API_DEBUG_URL = "http://sandbox.moho.com.tw/api/v3";
 
     protected $type = null;
     protected $token = null;
+    protected $refresh_token = null;
+    protected $client_id = null;
+    protected $client_secret = null;
     protected $debug_mode = false;
 
     private $api = null;
@@ -21,17 +24,49 @@ class Client
      * This client is based on Opauth
      */
 
-    public function __construct($type, $token, $is_debug = false)
+    public function __construct($opauth, $is_debug = false)
     {
-        $this->type = $type;
-        $this->token = $token;
+        $auth = $opauth["auth"];
+        $this->type = $auth["info"]["type"];
+        $this->token = $auth["credentials"]["token"];
+        $this->refresh_token = $auth["credentials"]["refresh_token"];
+        $this->client_id = $auth["credentials"]["client_id"];
+        $this->client_secret = $auth["credentials"]["client_secret"];
+
         $this->debug_mode = (bool) $is_debug;
 
         if(empty($this->type) || empty($this->token)) {
             throw new AuthNotValidException;
         }
 
-        $this->api = new Store($this);
+        $this->api = new Endpoint($this);
+    }
+
+    public function tokenInfo()
+    {
+        $url = \MOHOStrategy::BASE_URL;
+        if($this->debug_mode) {
+            $url = \MOHOStrategy::DEBUG_URL;
+        }
+
+        return $this->get($url . '/oauth/token/info');
+    }
+
+    public function refresh() {
+        $url = \MOHOStrategy::BASE_URL;
+        if($this->debug_mode) {
+            $url = \MOHOStrategy::DEBUG_URL;
+        }
+        $url .= "/oauth/token";
+
+        $result = $this->post($url, array('refresh_token' => $this->refresh_token,
+                                          'grant_type' => 'refresh_token',
+                                          'client_id' => $this->client_id,
+                                          'client_secret' => $this->client_secret));
+        $this->token = $result->access_token;
+        $this->refresh_token = $result->refresh_token;
+
+        return $result;
     }
 
     public function get($url, $data = array(), $options = null, &$responseHeaders = null)
@@ -40,7 +75,28 @@ class Client
         return json_decode(self::httpRequest($url . '?' . http_build_query($data, '', '&'), $options, $responseHeaders, $this->debug_mode));
     }
 
-    public function post($url, $data, $options = array(), &$responseHeaders)
+    public function post($url, $data, $options = array(), &$responseHeaders = null)
+    {
+        if(!is_array($options)) {
+            $options = array();
+        }
+
+        if(!isset($data['refresh_token'])) {
+            $data['access_token'] = $this->token;
+        }
+        $query = http_build_query($data, '', '&');
+
+        $stream = array('http' => array(
+            'method' => 'POST',
+            'header' => 'Content-Type: application/x-www-form-urlencoded',
+            'content' => $query
+        ));
+
+        $stream = array_replace_recursive($stream, $options);
+        return json_decode(self::httpRequest($url, $stream, $responseHeaders, $this->debug_mode));
+    }
+
+    public function put($url, $data, $options = array(), &$responseHeaders = null)
     {
         if(!is_array($options)) {
             $options = array();
@@ -50,13 +106,30 @@ class Client
         $query = http_build_query($data, '', '&');
 
         $stream = array('http' => array(
-            'method' => 'POST',
-            'header' => 'Content-Type: application/x-www-from-urlencode',
+            'method' => 'PUT',
+            'header' => 'Content-Type: application/x-www-form-urlencoded',
             'content' => $query
         ));
 
         $stream = array_replace_recursive($stream, $options);
         return json_decode(self::httpRequest($url, $stream, $responseHeaders, $this->debug_mode));
+    }
+
+    public function delete($url, $data = array(), $options = array(), &$responseHeaders = null)
+    {
+        if(!is_array($options)) {
+            $options = array();
+        }
+
+        $data['access_token'] = $this->token;
+        $query = http_build_query($data, '', '&');
+
+        $stream = array('http' => array(
+            'method' => 'DELETE',
+        ));
+
+        $stream = array_replace_recursive($stream, $options);
+        return json_decode(self::httpRequest($url . '?' . $query, $stream, $responseHeaders, $this->debug_mode));
     }
 
     /**
@@ -82,7 +155,12 @@ class Client
         }
 
         ob_start();
-        $content = file_get_contents($base_url . $url, false, $context);
+        if(strpos($url, "http://") === 0 || strpos($url, "https://") === 0) {
+            $content = file_get_contents($url, false, $context);
+        } else {
+            $content = file_get_contents($base_url . $url, false, $context);
+        }
+
         $warning = ob_get_contents();
         ob_end_clean();
         $responseHeaders = self::httpParseHerader($http_response_header);
