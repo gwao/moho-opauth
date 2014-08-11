@@ -129,6 +129,7 @@ class MOHOStrategy extends OpauthStrategy
                 "provider" => "MOHO",
                 "raw" => $headers
             );
+            return $this->errorCallback($error);
         }
 
         return json_decode($info);

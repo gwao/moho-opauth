@@ -175,7 +175,6 @@ class Client
     public static function httpParseHerader(array $originHeaders, $follow_redirect = true)
     {
         $headers = array();
-        $key = '';
         $tempCode = null;
         $statusCode = null;
         $tempReason = null;
@@ -222,9 +221,3 @@ class Client
     }
 }
 
-/**
- * Help Exception Class
- */
-
-class AuthNotValidException extends \Exception {}
-class HttpRequestException extends \Exception {}
